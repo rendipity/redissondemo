@@ -1,5 +1,7 @@
 package org.example;
 
+import cn.hutool.core.date.DateTime;
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.date.StopWatch;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.Redisson;
@@ -8,12 +10,14 @@ import org.redisson.config.Config;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+
+import static jodd.util.ThreadUtil.sleep;
 
 @Slf4j
 public class RedissonMain {
     RedissonClient redissonClient;
-
 
     private static final String BIZ_NAME = "merchant";
     private static final String TABLE_NAME = "store";
@@ -38,10 +42,6 @@ public class RedissonMain {
     public void destory(){
         //关闭客户端
         redissonClient.shutdown();
-    }
-    public static void main(String[] args) {
-        RedissonMain redissonMain = new RedissonMain();
-        redissonMain.method3();
     }
     public void method1(){
         //获取所有的key
@@ -87,6 +87,70 @@ public class RedissonMain {
         System.out.println(pWatch.shortSummary());
     }
 
+    /**
+     * 为List的每个元素设置过期时间
+     * 如果过期时间相同则使用 List类型
+     */
+    public void elementExpiredByList(){
+        DateTime now = DateUtil.date();
+        RList<Object> expireListTest = redissonClient.getList("expireListTest");
+        for (int i = 1; i <= 5; i++) {
+            String value="value"+i;
+            DateTime expiredTime = DateUtil.offsetMinute(now, i);
+            long expiredTimeStamp = expiredTime.getTime();
+            String storedValue=expiredTimeStamp+":"+value;
+            expireListTest.add(storedValue);
+        }
+    }
+
+    public Object getElementFromList(String target){
+        RList<String> expireTestList = redissonClient.getList("expireListTest");
+        boolean findTarget = false;
+        // 将过期的元素删除
+        Iterator<String> iterator = expireTestList.iterator();
+        while(iterator.hasNext()){
+            String e = iterator.next();
+            int divIndex = e.indexOf(':');
+            long expireTime = Long.parseLong(e.substring(0,divIndex));
+            String value = e.substring(divIndex+1);
+            if (value.equals(target)){
+                findTarget=true;
+            }
+            if (!expired(expireTime)){
+                break;
+            }
+            System.out.println(value+" 过期了,删除!");
+            iterator.remove();
+        }
+        // 如果list size = 0; 则将list删除
+        if (expireTestList.isEmpty()) {
+            expireTestList.delete();
+        }
+        // 如果查找元素不在上面过期的元素中，则继续查找元素
+        if (!expireTestList.isEmpty()&&!findTarget){
+            for(String e : expireTestList){
+                int divIndex = e.indexOf(':');
+                String value = e.substring(divIndex+1);
+                if (value.equals(target)){
+                    return e;
+                }
+            }
+        }
+        return null;
+    }
+    /**
+     * 如果过期时间不同，则使用ZSet类型
+     */
+    public void elementExpiredByZSet(){
+
+    }
+
+
+    // 使用redisson的来元素淘汰功能来为Hash元素设置过期时间
+
+
+
+
     /*
   生成redisKey
    */
@@ -102,6 +166,37 @@ public class RedissonMain {
         long deleteNum = clientKeys.delete(redisKey);
         if (deleteNum==0)
             log.info("delete Cache failed");
+    }
+
+
+    private Boolean expired(long timestamp1){
+        DateTime date1 = DateUtil.date(timestamp1);
+        DateTime date2 = DateUtil.date();
+        return DateUtil.compare(date1, date2)<0;
+    }
+
+
+    /*
+    1691997988790:value1
+    1691998048790:value2
+    1691998108790:value3
+    1691998168790:value4
+    1691998228790:value5
+     */
+    public static void main(String[] args) {
+        RedissonMain redissonMain = new RedissonMain();
+        redissonMain.elementExpiredByList();
+        Object value1 = redissonMain.getElementFromList("value1");
+        System.out.println("value1 = "+value1);
+        System.out.println("sleep 60s");
+        sleep(60000);
+        log.info("睡醒了");
+        value1 = redissonMain.getElementFromList("value1");
+        log.info("value1:{}",value1);
+
+        Object value4 = redissonMain.getElementFromList("value4");
+        log.info("value4:{}",value4);
+        redissonMain.destory();
     }
 
 }

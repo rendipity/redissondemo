@@ -3,13 +3,13 @@ package org.example;
 import cn.hutool.core.date.DateUtil;
 
 import java.util.Comparator;
-import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class Test {
+// 取最新的一个
+public class LatestTest {
     public static void main(String[] args) {
         MktActivityUnitDTO dto1 = new MktActivityUnitDTO();
         dto1.setStatus(ActivityUnitStatusEnum.ONLINE.getCode());
